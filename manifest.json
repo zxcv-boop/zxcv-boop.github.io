@@ -1,0 +1,16 @@
+{
+  "name": "高三(8)班 · 班主任工作台",
+  "short_name": "高三8班工作台",
+  "description": "高三(8)班班主任日常工作台：待办、课表、名册、座位、考勤、成绩、作业、宿舍",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6fb",
+  "theme_color": "#1f3a5f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
