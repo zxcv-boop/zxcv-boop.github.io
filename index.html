@@ -292,6 +292,9 @@
   .player-host{aspect-ratio:16/9;background:#000;width:100%;}
   .player-host iframe,.player-host video{width:100%;height:100%;border:0;background:#000;display:block;}
 </style>
+<!-- 增强模块依赖:Excel解析 与 图片OCR识别 -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 <div id="loginMask" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:linear-gradient(135deg,#162a47,#1f3a5f);">
@@ -460,6 +463,7 @@
         <div class="note">💺 <b>蓝色</b>为班干部;空位为空白座位。</div>
         <div class="toolbar">
           <button class="btn pri" onclick="seatRandom()">🎲 随机排座</button>
+          <button class="btn ghost" onclick="seatAuto()">📋 按名册自动排座</button>
           <button class="btn ghost" onclick="seatManual()">🖐 手动排座</button>
           <button class="btn ghost" onclick="seatLayout()">📐 设置布局</button>
           <button class="btn ghost" onclick="seatReset()">↩ 恢复默认</button>
@@ -572,35 +576,44 @@
             </table>
           </div>
         </div>
+        <div class="panel">
+          <div class="panel-t">📊 每天情况统计</div>
+          <div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);">
+            <input id="dormDailyDate" type="date" class="filter" onchange="renderDormDaily()" style="width:170px;">
+            <span style="font-size:12.5px;color:var(--soft);">选择日期后,点各宿舍「➕ 录 / ✏️ 改」记录当日<b>就寝纪律 / 卫生 / 纪律表现</b>与备注。</span>
+          </div>
+          <div style="overflow-x:auto;"><div id="dormDailyWrap"></div></div>
+        </div>
       </section>
 
       <!-- ============ 班会 ============ -->
       <section class="page" id="page-meeting">
-        <div class="page-head"><h2>班会记录</h2><p>记录每次班会内容与要点。</p></div>
+        <div class="page-head"><h2>班会记录</h2><p>记录每次班会的内容与要点。</p></div>
+        <div class="toolbar">
+          <button class="btn pri" onclick="meetingAdd()">➕ 新增班会</button>
+          <span style="font-size:12.5px;color:var(--soft);">记录"哪天 · 什么主题 · 谁参会 · 简要内容",可增删</span>
+        </div>
         <div class="panel">
-          <div class="panel-t">近期班会</div>
-          <div class="timeline">
-            <div class="tl-item"><div class="date">周五</div><div class="t"><b>主题班会:二轮复习方法</b><span>待进行 · 主讲:班主任</span></div></div>
-            <div class="tl-item"><div class="date">上周</div><div class="t"><b>月考成绩分析会</b><span>总结失分点,制定提分计划 · 记录人:班长</span></div></div>
-            <div class="tl-item"><div class="date">更早</div><div class="t"><b>诚信考试教育</b><span>签署诚信考试承诺书</span></div></div>
-          </div>
+          <div class="panel-t">近期班会(按日期倒序)</div>
+          <div id="meetingList"></div>
         </div>
       </section>
 
       <!-- ============ 谈心 ============ -->
       <section class="page" id="page-chat">
         <div class="page-head"><h2>谈心谈话</h2><p>关注每一位学生的心理状态。</p></div>
+        <div class="toolbar">
+          <button class="btn pri" onclick="chatAdd()">➕ 新增谈话</button>
+          <span style="font-size:12.5px;color:var(--soft);">记录与学生的谈心对话,可增删</span>
+        </div>
         <div class="panel">
           <div class="panel-t">近期谈话记录</div>
-          <table>
-            <thead><tr><th>学生</th><th>日期</th><th>谈话主题</th><th>要点 / 跟进</th></tr></thead>
-            <tbody>
-              <tr><td>李明</td><td>08/20</td><td>成绩下滑</td><td>反馈课堂状态,约定每周自查计划</td></tr>
-              <tr><td>王雨欣</td><td>08/21</td><td>情绪调整</td><td>疏导压力,建议与心理老师沟通</td></tr>
-              <tr><td>刘思琪</td><td>08/22</td><td>进步鼓励</td><td>肯定进步,提醒保持节奏</td></tr>
-              <tr><td>陈昊</td><td>08/23</td><td>纪律迟到</td><td>了解情况,帮助规划作息</td></tr>
-            </tbody>
-          </table>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>学生</th><th>日期</th><th>谈话主题</th><th>要点 / 跟进</th><th style="width:80px;">操作</th></tr></thead>
+              <tbody id="chatBody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -608,16 +621,13 @@
       <section class="page" id="page-parents">
         <div class="page-head"><h2>家长沟通</h2><p>维护家校联系记录。</p></div>
         <div class="toolbar">
-          <input class="search" placeholder="🔍 搜索家长 / 学生">
-          <button class="btn pri">➕ 新增沟通记录</button>
+          <input class="search" id="parentSearch" placeholder="🔍 搜索家长 / 学生" oninput="renderParents()">
+          <button class="btn pri" onclick="parentAdd()">➕ 新增沟通记录</button>
+          <span style="font-size:12.5px;color:var(--soft);">新增时自动带出该生在名册中的联系电话</span>
         </div>
         <div class="panel">
           <div class="panel-t">近期沟通记录</div>
-          <div class="feeds">
-            <div class="feed"><div class="dot">📞</div><div><div class="t">电话 · 李明家长</div><div class="d">沟通月考成绩与复习计划,约定持续跟进。</div></div><div class="time">今天</div></div>
-            <div class="feed"><div class="dot">📱</div><div><div class="t">微信 · 孙梦洁家长</div><div class="d">确认请假事宜,提醒注意休息。</div></div><div class="time">昨天</div></div>
-            <div class="feed"><div class="dot">👥</div><div><div class="t">家访 · 陈昊家</div><div class="d">了解家庭情况,帮助改善作息习惯。</div></div><div class="time">3天前</div></div>
-          </div>
+          <div class="feeds" id="parentFeeds"></div>
         </div>
       </section>
 
@@ -1088,7 +1098,24 @@
       ['','','','','','','',''],
       ['','','','','','','',''],
       ['s05','s04','s03','','','','','']
-    ]
+    ],
+    meetings:[
+      {id:'m1',date:'2026-08-28',theme:'主题班会:二轮复习方法',attendee:'全体同学',content:'讲解二轮复习策略与时间规划,部署周测安排'},
+      {id:'m2',date:'2026-08-22',theme:'月考成绩分析会',attendee:'全体同学',content:'总结各科失分点,制定提分计划,记录人:班长'},
+      {id:'m3',date:'2026-06-15',theme:'诚信考试教育',attendee:'全体同学',content:'学习并签署诚信考试承诺书'}
+    ],
+    chats:[
+      {id:'c1',student:'李明',date:'2026-08-20',theme:'成绩下滑',tips:'反馈课堂状态,约定每周自查计划'},
+      {id:'c2',student:'王雨欣',date:'2026-08-21',theme:'情绪调整',tips:'疏导压力,建议与心理老师沟通'},
+      {id:'c3',student:'刘思琪',date:'2026-08-22',theme:'进步鼓励',tips:'肯定进步,提醒保持节奏'},
+      {id:'c4',student:'陈昊',date:'2026-08-23',theme:'纪律迟到',tips:'了解情况,帮助规划作息'}
+    ],
+    parentLogs:[
+      {id:'p1',date:'2026-08-29',type:'电话',student:'李明',phone:'13988887812',content:'沟通月考成绩与复习计划,约定持续跟进'},
+      {id:'p2',date:'2026-08-28',type:'微信',student:'孙梦洁',phone:'13988886674',content:'确认请假事宜,提醒注意休息'},
+      {id:'p3',date:'2026-08-26',type:'家访',student:'陈昊',phone:'13688885520',content:'了解家庭情况,帮助改善作息习惯'}
+    ],
+    dormDaily:{}
   };
 
   var DB=getDB();
@@ -1156,7 +1183,10 @@
     else if(p==='attendance') renderAttendance();
     else if(p==='scores') renderScores();
     else if(p==='homework') renderHomework();
-    else if(p==='dorm') renderDorm();
+    else if(p==='dorm'){ renderDorm(); renderDormDaily(); }
+    else if(p==='meeting') renderMeetings();
+    else if(p==='chat') renderChats();
+    else if(p==='parents') renderParents();
   }
 
   // ============ 今日待办 ============
@@ -1776,14 +1806,14 @@
     wrap.innerHTML='';
     list.forEach(function(h){
       var box=document.createElement('div'); box.style.cssText='border-bottom:1px solid var(--line);padding:16px 20px;';
-      var head='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b>📅 '+esc(h.date)+'</b><span style="font-size:12px;color:var(--soft);">'+h.items.length+' 科</span></div>';
-      var table='<table><thead><tr><th>科目</th><th>内容</th><th>应交</th><th>已交</th><th>未交</th><th style="width:56px;"></th></tr></thead><tbody>';
+      var head='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b>📅 '+esc(h.date)+'</b><span style="font-size:12px;color:var(--soft);">'+h.items.length+' 科</span><button class="btn ghost" style="padding:4px 10px;font-size:12px;color:#d03b3b;border-color:#f3caca;" onclick="hwDel(\''+esc(h.id)+'\')">🗑 删除该次</button></div>';
+      var table='<table><thead><tr><th>科目</th><th>内容</th><th>应交</th><th>已交</th><th>未交</th><th style="width:104px;"></th></tr></thead><tbody>';
       var sumJ=0,sumY=0;
       h.items.forEach(function(it){
         var should=DB.students.length, miss=it.missing||[]; var done=should-miss.length; sumJ+=should; sumY+=done;
         table+='<tr><td>'+esc(it.subj)+'</td><td>'+esc(it.content)+'</td><td>'+should+'</td><td>'+done+'</td>'
           +'<td>'+(miss.length?miss.map(function(sid){var s=studById(sid);return esc(s?s.name:'?');}).join('、'):'-')+'</td>'
-          +'<td style="text-align:center;"><button class="btn ghost" style="padding:3px 9px;font-size:12px;" onclick="hwEdit(\''+esc(h.id)+'\','+h.items.indexOf(it)+')">✏️</button></td></tr>';
+          +'<td style="text-align:center;"><button class="btn ghost" style="padding:3px 9px;font-size:12px;" onclick="hwEdit(\''+esc(h.id)+'\','+h.items.indexOf(it)+')">✏️</button> <button class="btn ghost" style="padding:3px 9px;font-size:12px;color:#d03b3b;border-color:#f3caca;" onclick="hwDelItem(\''+esc(h.id)+'\','+h.items.indexOf(it)+')">🗑</button></td></tr>';
       });
       table+='</tbody><tfoot><tr><td colspan="2" style="font-weight:700;">合计 / 完成率</td><td>'+sumJ+'</td><td>'+sumY+'</td><td>'+(sumJ-sumY)+'</td><td></td></tr></tfoot></table>';
       box.innerHTML=head+table; wrap.appendChild(box);
@@ -1896,6 +1926,289 @@
     });
   }
 
+
+  // ============================================================
+  //  以下为「班主任工作台」功能增强新增代码(导入增强/自动排座/
+  //  作业删除/宿舍每日统计/班会·谈心·家长动态化与增删)
+  // ============================================================
+
+  // ---------- 通用:文件 / 表格 / 图片识别 ----------
+  function extOf(name){ var i=(name||'').lastIndexOf('.'); return i<0?'':(name.slice(i+1)||'').toLowerCase(); }
+  function readTextFile(file,cb){ var r=new FileReader(); r.onload=function(){ cb(r.result||''); }; r.onerror=function(){ cb(''); }; r.readAsText(file,'utf-8'); }
+  function readXLSX(file,cb){
+    if(typeof XLSX==='undefined'){ alert('未加载 Excel 解析库(xlsx)。请联网后重试,或将文件另存为 CSV 后上传。'); cb(''); return; }
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var wb=XLSX.read(new Uint8Array(r.result),{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        cb(XLSX.utils.sheet_to_csv(ws)||'');
+      }catch(e){ alert('解析 Excel 失败:'+(e&&e.message||e)); cb(''); }
+    };
+    r.readAsArrayBuffer(file);
+  }
+  function parseTableFile(file,cb){
+    var ext=extOf(file.name);
+    if(ext==='xlsx'||ext==='xls') readXLSX(file,cb);
+    else readTextFile(file,cb);
+  }
+  function ocrImage(file,cb){
+    if(typeof Tesseract==='undefined'){ alert('未加载 OCR 识别库(Tesseract.js)。请联网后重试,或对照图片手工填入内容。'); cb(''); return; }
+    var url=URL.createObjectURL(file);
+    alert('正在识别图片,请稍候…(内容较多时需十几秒,识别结果请核对后导入)');
+    Tesseract.recognize(url,'chi_sim+eng',{logger:function(){}}).then(function(res){
+      URL.revokeObjectURL(url);
+      cb((res&&res.data&&res.data.text)||'');
+    }).catch(function(e){ URL.revokeObjectURL(url); alert('OCR 识别失败:'+(e&&e.message||e)); cb(''); });
+  }
+  function pickAndParse(accept,intoId,kind){
+    var i=document.createElement('input'); i.type='file'; i.accept=accept;
+    i.onchange=function(){ var f=i.files&&i.files[0]; if(!f) return;
+      if(kind==='image'){ ocrImage(f,function(t){ if(t) putInto(intoId,t.trim()); }); }
+      else { alert('正在解析文件…'); parseTableFile(f,function(t){ if(t) putInto(intoId,t.trim()); else alert('未能从文件读取到有效内容'); }); }
+    };
+    i.click();
+  }
+
+  // ---------- ① 课表:导入支持 粘贴 / 表格文件 / 图片 ----------
+  function schImport(){
+    gmOpen('📥 导入课表',
+      '<p class="tip">支持三种方式,识别/解析后填入下方文本框,可修改后再「确认导入」:</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+      +'<button class="btn ghost" onclick="pickAndParse(\'.xlsx,.xls,.csv,.tsv,.txt\',\'impSch\',\'file\')">📁 上传表格文件</button>'
+      +'<button class="btn ghost" onclick="pickAndParse(\'image/*\',\'impSch\',\'image\')">🖼 上传图片识别</button>'
+      +'</div>'
+      +'<p class="tip">每行一个节次,格式:<b>节次,周一,周二,周三,周四,周五</b>(支持逗号/制表符/空格分隔)。<br>示例:<br>早读,语文,英语,数学,语文,英语<br>第1节,数学,语文,英语,数学,物理</p>'
+      +'<textarea id="impSch" style="width:100%;height:200px;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13px;font-family:monospace;" placeholder="在此粘贴课表,或通过上方按钮上传表格/图片后自动填入..."></textarea>'
+      +'<p style="font-size:12px;color:#d03b3b;">注意:导入将覆盖当前全部课表。</p>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="schDoImport()">确认导入</button>');
+  }
+
+  // ---------- ② 学生名册:导入支持 粘贴 / 表格文件 / 图片 ----------
+  function stuImport(){
+    gmOpen('📥 表格导入学生',
+      '<p class="tip">支持三种方式,识别/解析后填入下方文本框,可修改后再导入:</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+      +'<button class="btn ghost" onclick="pickAndParse(\'.xlsx,.xls,.csv,.tsv,.txt\',\'impStu\',\'file\')">📁 上传表格文件</button>'
+      +'<button class="btn ghost" onclick="pickAndParse(\'image/*\',\'impStu\',\'image\')">🖼 上传图片识别</button>'
+      +'</div>'
+      +'<p class="tip">每行一位学生,支持表头与逗号/制表符/空格分隔。可识别的列:<b>姓名/学号/性别/小组/职务/电话</b><br>示例:<br>姓名,学号,性别,小组,职务,电话<br>钱多多,09,男,1,纪律委员,13600001111</p>'
+      +'<textarea id="impStu" style="width:100%;height:200px;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13px;font-family:monospace;" placeholder="粘贴学生表格,或通过上方按钮上传表格/图片后自动填入..."></textarea>'
+      +'<p style="font-size:12px;color:var(--soft);">重名学生将自动跳过。</p>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="stuDoImport()">确认导入</button>');
+  }
+
+  // ---------- ③ 座位:名册完成后一键自动排列 ----------
+  function seatAuto(){
+    if(!DB.students.length){ alert('请先在「学生名册」添加学生'); return; }
+    if(!confirm('按名册顺序自动排列座位(将清空现有座位并顺序填充全部学生)?')) return;
+    var rows=DB.seatRows.length||5, cols=parseInt(DB.seatCols||8,10);
+    var flat=[]; DB.seatRows.forEach(function(r){ r.forEach(function(c){ flat.push(c||''); }); });
+    var cap=rows*cols;
+    var names=DB.students.map(function(s){return s.id;});
+    if(names.length>cap){ alert('座位不足(共'+cap+'个),仅排列前'+cap+'名学生,可在「设置布局」中增加座位。'); names=names.slice(0,cap); }
+    var idx=0, nr=[];
+    for(var r=0;r<rows;r++){ var row=[]; for(var c=0;c<cols;c++){ row.push(names[idx++]||''); } nr.push(row); }
+    DB.seatRows=nr; DB.seatCols=cols; saveDB(); renderSeats();
+    alert('✅ 已按名册顺序排列 '+Math.min(names.length,cap)+' 名学生座位');
+  }
+
+  // ---------- ④ 成绩:导入支持 粘贴 / 表格文件 / 图片 ----------
+  function scoreAdd(){
+    gmOpen('📥 表格导入成绩',
+      '<p class="tip">支持三种方式,识别/解析后填入下方文本框,核对后再「保存成绩」:</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+      +'<button class="btn ghost" onclick="pickAndParse(\'.xlsx,.xls,.csv,.tsv,.txt\',\'scData\',\'file\')">📁 上传表格文件</button>'
+      +'<button class="btn ghost" onclick="pickAndParse(\'image/*\',\'scData\',\'image\')">🖼 上传图片识别</button>'
+      +'</div>'
+      +'<p class="tip">每行一位学生,建议第一行写表头自定义科目,系统自动归位到明细列(<b>语数英 + 物理/历史二选一 + 政/地/化/生四选二</b>)。<br>示例(理科):<br>姓名 语文 数学 英语 物理 化学 生物 总分<br>王浩然 125 142 128 88 86 90 659<br>未填总分将自动加和。</p>'
+      +'<div class="kv">'
+      +'<div class="it"><div class="k">考试名称</div><div><input id="scExam" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="如:九月月考"></div></div>'
+      +'<div class="it"><div class="k">考试日期</div><div><input id="scDate" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="'+fmtToday()+'"></div></div>'
+      +'</div>'
+      +'<textarea id="scData" style="width:100%;height:200px;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13px;font-family:monospace;" placeholder="姓名 语文 数学 英语 物理 化学 生物 总分(或通过上方按钮上传表格/图片后自动填入)"></textarea>'
+      +'<p style="font-size:12px;color:#d03b3b;">考试名已存在将覆盖该次考试的全部成绩;学生姓名需与「学生名册」一致。</p>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="scoreSave()">保存成绩</button>');
+  }
+
+  // ---------- ⑤ 作业统计:增加删除 ----------
+  function hwDel(id){
+    if(!confirm('删除该次作业记录?')) return;
+    DB.homework=DB.homework.filter(function(h){ return h.id!==id; });
+    saveDB(); renderHomework(); renderDashboard();
+  }
+  function hwDelItem(id,idx){
+    var h=DB.homework.find(function(x){ return x.id===id; });
+    if(!h||!h.items[idx]) return;
+    if(!confirm('删除该科目的作业项?')) return;
+    h.items.splice(idx,1);
+    saveDB(); renderHomework();
+  }
+
+  // ---------- ⑥ 宿舍:每天情况统计 ----------
+  function dormDailyGet(){ if(!DB.dormDaily) DB.dormDaily={}; return DB.dormDaily; }
+  function dormDailyStatKeys(){ return ['bed','hygiene','discipline']; }
+  function dormDailyLabel(k){ return k==='bed'?'就寝纪律':(k==='hygiene'?'卫生':'纪律表现'); }
+  function dormDailyMark(v){ return v==='ok'?'优':(v==='mid'?'中':'差'); }
+  function dormDailyBadge(v){ var c=v==='ok'?'var(--green)':(v==='mid'?'var(--amber)':'var(--red)'); return '<b style="color:'+c+';">'+dormDailyMark(v)+'</b>'; }
+  function renderDormDaily(){
+    var wrap=document.getElementById('dormDailyWrap'); if(!wrap) return;
+    var date=(document.getElementById('dormDailyDate')?document.getElementById('dormDailyDate').value:'').trim()||fmtToday();
+    var daily=dormDailyGet();
+    if(!DB.dorms.length){ wrap.innerHTML='<div class="placeholder">暂无宿舍,请先在「宿舍一览」添加宿舍</div>'; return; }
+    var html='<table><thead><tr><th>房号 · 宿舍</th><th>就寝纪律</th><th>卫生</th><th>纪律表现</th><th>备注</th><th style="width:70px;"></th></tr></thead><tbody>';
+    DB.dorms.forEach(function(d){
+      var rec=daily[date]?daily[date][d.id]:null;
+      if(!rec) rec={bed:'',hygiene:'',discipline:'',note:''};
+      html+='<tr><td>'+esc(d.room)+' · '+esc(d.name)+'</td>'
+        +'<td>'+ (rec.bed?dormDailyBadge(rec.bed):'<span style="color:#aab4c5;">未录</span>')+'</td>'
+        +'<td>'+ (rec.hygiene?dormDailyBadge(rec.hygiene):'<span style="color:#aab4c5;">未录</span>')+'</td>'
+        +'<td>'+ (rec.discipline?dormDailyBadge(rec.discipline):'<span style="color:#aab4c5;">未录</span>')+'</td>'
+        +'<td>'+esc(rec.note||'-')+'</td>'
+        +'<td><button class="btn ghost" style="padding:3px 9px;font-size:12px;" onclick="dormDailyEdit(\''+esc(date)+'\',\''+d.id+'\')">'+(rec.bed||rec.hygiene||rec.discipline?'✏️ 改':'➕ 录')+'</button></td></tr>';
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }
+  function dormDailyAdd(){
+    var date=(document.getElementById('dormDailyDate')?document.getElementById('dormDailyDate').value:'').trim()||fmtToday();
+    document.getElementById('dormDailyDate').value=date;
+    renderDormDaily();
+    alert('已切换到 '+date+' 情况。点各宿舍行「➕ 录 / ✏️ 改」填写该日情况。');
+  }
+  function dormDailyEdit(date,dormId){
+    var d=DB.dorms.find(function(x){return x.id===dormId;}); if(!d) return;
+    var daily=dormDailyGet(); if(!daily[date]) daily[date]={};
+    var rec=daily[date][dormId]||{bed:'',hygiene:'',discipline:'',note:''};
+    function seg(k,label){ var o=''; ['','ok','mid','bad'].forEach(function(v){ o+='<option value="'+v+'"'+(rec[k]===v?' selected':'')+'>'+(v===''?'--':dormDailyMark(v))+'</option>'; }); return '<div class="it"><div class="k">'+label+'</div><div><select id="dd_'+k+'" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;">'+o+'</select></div></div>'; }
+    gmOpen('📅 '+esc(date)+' · '+esc(d.room)+' '+esc(d.name)+' 每日情况',
+      '<div class="kv">'+seg('bed','就寝纪律')+seg('hygiene','卫生')+seg('discipline','纪律表现')+'</div>'
+      +'<div class="kv"><div class="it" style="grid-column:1/-1;"><div class="k">备注</div><div><input id="dd_note" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="'+esc(rec.note||'')+'" placeholder="如:熄灯后有人讲话 / 卫生需加强"></div></div></div>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="dormDailySave(\''+esc(date)+'\',\''+dormId+'\')">保存</button>');
+  }
+  function dormDailySave(date,dormId){
+    var daily=dormDailyGet(); if(!daily[date]) daily[date]={};
+    var rec={bed:document.getElementById('dd_bed').value,hygiene:document.getElementById('dd_hygiene').value,discipline:document.getElementById('dd_discipline').value,note:document.getElementById('dd_note').value.trim()};
+    daily[date][dormId]=rec; saveDB(); gmClose(); renderDormDaily();
+  }
+
+  // ---------- ⑦ 班会记录:动态化 + 增删 ----------
+  function renderMeetings(){
+    var wrap=document.getElementById('meetingList'); if(!wrap) return;
+    if(!DB.meetings.length){ wrap.innerHTML='<div class="placeholder">暂无班会记录,点击右上角「➕ 新增班会」</div>'; return; }
+    var arr=DB.meetings.slice().sort(function(a,b){ return (a.date<b.date)?1:-1; });
+    wrap.innerHTML='';
+    arr.forEach(function(m){
+      var box=document.createElement('div'); box.style.cssText='border-bottom:1px solid var(--line);padding:14px 4px;';
+      box.innerHTML='<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
+        +'<div><div style="color:var(--orange);font-size:12.5px;font-weight:700;margin-bottom:3px;">📅 '+esc(m.date)+'</div>'
+        +'<div style="font-weight:700;color:var(--ink);margin-bottom:4px;">'+esc(m.theme||'')+'</div>'
+        +'<div style="font-size:12.5px;color:var(--soft);"><b>参会:</b>'+esc(m.attendee||'-')+'</div>'
+        +'<div style="font-size:12.5px;color:var(--soft);"><b>内容:</b>'+esc(m.content||'-')+'</div></div>'
+        +'<button class="btn ghost" style="padding:4px 10px;font-size:12px;color:#d03b3b;border-color:#f3caca;flex-shrink:0;" onclick="meetingDel(\''+esc(m.id)+'\')">✕ 删除</button></div>';
+      wrap.appendChild(box);
+    });
+  }
+  function meetingAdd(){
+    gmOpen('➕ 新增班会记录',
+      '<div class="kv">'
+      +'<div class="it"><div class="k">班会日期</div><div><input id="mDate" type="date" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="'+fmtToday()+'"></div></div>'
+      +'<div class="it"><div class="k">班会主题</div><div><input id="mTheme" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="如:诚信考试教育"></div></div>'
+      +'<div class="it" style="grid-column:1/-1;"><div class="k">参会人员</div><div><input id="mAttendee" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="全体同学" placeholder="如:全体同学 / 班干部等"></div></div>'
+      +'<div class="it" style="grid-column:1/-1;"><div class="k">简要内容</div><div><textarea id="mContent" style="width:100%;min-height:70px;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="记录班会主要内容、要求与落实情况..."></textarea></div></div>'
+      +'</div>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="meetingSave()">保存</button>');
+  }
+  function meetingSave(){
+    var date=document.getElementById('mDate').value||fmtToday();
+    var theme=document.getElementById('mTheme').value.trim();
+    if(!theme){ alert('请填写班会主题'); return; }
+    DB.meetings.push({id:'m'+Date.now(),date:date,theme:theme,attendee:(document.getElementById('mAttendee').value||'全体同学').trim(),content:document.getElementById('mContent').value.trim()});
+    saveDB(); gmClose(); renderMeetings();
+  }
+  function meetingDel(id){ if(!confirm('删除这条班会记录?')) return; DB.meetings=DB.meetings.filter(function(m){return m.id!==id;}); saveDB(); renderMeetings(); }
+
+  // ---------- ⑧ 谈心谈话:动态化 + 增删 ----------
+  function renderChats(){
+    var body=document.getElementById('chatBody'); if(!body) return;
+    if(!DB.chats.length){ body.innerHTML='<tr><td colspan="5" style="text-align:center;color:#aab4c5;padding:24px;">暂无谈话记录,点击「➕ 新增谈话」</td></tr>'; return; }
+    var arr=DB.chats.slice().sort(function(a,b){ return (a.date<b.date)?1:-1; });
+    body.innerHTML='';
+    arr.forEach(function(c){
+      body.innerHTML+='<tr><td>'+esc(c.student)+'</td><td>'+esc(c.date)+'</td><td>'+esc(c.theme||'-')+'</td><td>'+esc(c.tips||'-')+'</td>'
+        +'<td style="text-align:center;"><button class="btn ghost" style="padding:3px 9px;font-size:12px;color:#d03b3b;border-color:#f3caca;" onclick="chatDel(\''+esc(c.id)+'\')">✕ 删除</button></td></tr>';
+    });
+  }
+  function chatAdd(){
+    var opts=DB.students.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');
+    gmOpen('➕ 新增谈话记录',
+      '<div class="kv">'
+      +'<div class="it"><div class="k">学生</div><div><select id="cStu" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;"><option value="">- 选择学生-</option>'+opts+'</select></div></div>'
+      +'<div class="it"><div class="k">日期</div><div><input id="cDate" type="date" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="'+fmtToday()+'"></div></div>'
+      +'<div class="it" style="grid-column:1/-1;"><div class="k">谈话主题</div><div><input id="cTheme" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="如:成绩下滑 / 情绪调整"></div></div>'
+      +'<div class="it" style="grid-column:1/-1;"><div class="k">要点 / 跟进</div><div><input id="cTips" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="谈话要点与后续跟进措施"></div></div>'
+      +'</div>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="chatSave()">保存</button>');
+  }
+  function chatSave(){
+    var student=document.getElementById('cStu').value;
+    if(!student){ alert('请选择学生'); return; }
+    DB.chats.push({id:'c'+Date.now(),student:student,date:document.getElementById('cDate').value||fmtToday(),theme:document.getElementById('cTheme').value.trim(),tips:document.getElementById('cTips').value.trim()});
+    saveDB(); gmClose(); renderChats();
+  }
+  function chatDel(id){ if(!confirm('删除这条谈话记录?')) return; DB.chats=DB.chats.filter(function(c){return c.id!==id;}); saveDB(); renderChats(); }
+
+  // ---------- ⑨ 家长沟通:动态化 + 增删 + 电话联动名册 ----------
+  function renderParents(){
+    var feed=document.getElementById('parentFeeds'); if(!feed) return;
+    var kw=(document.getElementById('parentSearch')?document.getElementById('parentSearch').value:'').trim();
+    var list=DB.parentLogs.slice().sort(function(a,b){ return (a.date<b.date)?1:-1; });
+    if(kw) list=list.filter(function(p){ return (p.student+p.content+p.type).indexOf(kw)>-1; });
+    if(!list.length){ feed.innerHTML='<div class="placeholder">暂无沟通记录,点击「➕ 新增沟通记录」</div>'; return; }
+    feed.innerHTML='';
+    var typeIcon={电话:'📞',微信:'📱',家访:'👥',短信:'💬','':'💬'};
+    list.forEach(function(p){
+      var d=document.createElement('div'); d.className='feed';
+      d.innerHTML='<div class="dot">'+(typeIcon[p.type]||'💬')+'</div>'
+        +'<div style="flex:1;"><div class="t">'+esc(p.type||'')+' · '+esc(p.student)+'家长</div>'
+        +'<div class="m" style="font-size:12px;color:#0f62fe;margin:2px 0;">📞 '+esc(p.phone||'-')+'</div>'
+        +'<div class="d">'+esc(p.content||'')+'</div></div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;"><div class="time">'+esc(p.date||'')+'</div>'
+        +'<button class="btn ghost" style="padding:3px 9px;font-size:11px;color:#d03b3b;border-color:#f3caca;" onclick="parentDel(\''+esc(p.id)+'\')">✕ 删除</button></div>';
+      feed.appendChild(d);
+    });
+  }
+  function parentStuChange(){
+    var sel=document.getElementById('pStu');
+    var ph=document.getElementById('pPhone'); if(!sel||!ph) return;
+    var name=sel.value; var st=DB.students.find(function(s){return s.name===name;});
+    ph.value=(st&&st.phone)||'';
+  }
+  function parentAdd(){
+    var opts='<option value="">- 选择学生(自动带出电话)-</option>';
+    DB.students.forEach(function(s){ opts+='<option value="'+esc(s.name)+'" data-phone="'+esc(s.phone||'')+'">'+esc(s.name)+' ('+esc(s.no||'')+')</option>'; });
+    function seg(k,label,ph,xs){ var o='<option value="">'+ph+'</option>'; (xs||[]).forEach(function(t){ o+='<option'+(k===t?' selected':'')+'>'+t+'</option>'; }); return '<div class="it"><div class="k">'+label+'</div><div><select id="'+k+'" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;">'+o+'</select></div></div>'; }
+    gmOpen('➕ 新增沟通记录',
+      '<p class="tip" style="margin-bottom:8px;">选择学生后将<b>自动带出该生在「学生名册」中的联系电话</b>,可直接保存或修改。</p>'
+      +'<div class="kv">'
+      +'<div class="it"><div class="k">学生(家长)</div><div><select id="pStu" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" onchange="parentStuChange()">'+opts+'</select></div></div>'
+      +seg('pType','沟通方式','选择方式',['电话','微信','家访','短信'])
+      +'<div class="it"><div class="k">联系电话(来自名册,可改)</div><div><input id="pPhone" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="自动带出名册电话"></div></div>'
+      +'<div class="it"><div class="k">日期</div><div><input id="pDate" type="date" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" value="'+fmtToday()+'"></div></div>'
+      +'<div class="it" style="grid-column:1/-1;"><div class="k">沟通内容</div><div><input id="pContent" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;" placeholder="沟通事项与约定"></div></div>'
+      +'</div>',
+      '<button class="btn" onclick="gmClose()">取消</button><button class="btn pri" onclick="parentSave()">保存</button>');
+  }
+  function parentSave(){
+    var student=document.getElementById('pStu').value;
+    if(!student){ alert('请选择学生'); return; }
+    var phone=document.getElementById('pPhone').value.trim();
+    DB.parentLogs.push({id:'p'+Date.now(),date:document.getElementById('pDate').value||fmtToday(),type:document.getElementById('pType').value||'电话',student:student,phone:phone,content:document.getElementById('pContent').value.trim()});
+    saveDB(); gmClose(); renderParents();
+  }
+  function parentDel(id){ if(!confirm('删除这条沟通记录?')) return; DB.parentLogs=DB.parentLogs.filter(function(p){return p.id!==id;}); saveDB(); renderParents(); }
+
+
   // ============ 初始化 ============
   (function(){
     DB=getDB();
@@ -1905,6 +2218,7 @@
     var ad=document.getElementById('attDate'); if(ad) ad.addEventListener('change',renderAttendance);
     renderDashboard(); renderTodo(); renderWeek(); renderSchedule(); renderReminders();
     renderStudents(); renderSeats(); renderAttendance(); renderScores(); renderHomework(); renderDorm();
+    renderDormDaily(); renderMeetings(); renderChats(); renderParents();
   })();
 </script>
 
