@@ -2002,15 +2002,19 @@
   function seatAuto(){
     if(!DB.students.length){ alert('请先在「学生名册」添加学生'); return; }
     if(!confirm('按名册顺序自动排列座位(将清空现有座位并顺序填充全部学生)?')) return;
-    var rows=DB.seatRows.length||5, cols=parseInt(DB.seatCols||8,10);
-    var flat=[]; DB.seatRows.forEach(function(r){ r.forEach(function(c){ flat.push(c||''); }); });
-    var cap=rows*cols;
+    var cols=parseInt(DB.seatCols||8,10); if(isNaN(cols)||cols<1)cols=8; if(cols>30)cols=30;
     var names=DB.students.map(function(s){return s.id;});
-    if(names.length>cap){ alert('座位不足(共'+cap+'个),仅排列前'+cap+'名学生,可在「设置布局」中增加座位。'); names=names.slice(0,cap); }
+    var rows=DB.seatRows.length||5;
+    var expanded='';
+    if(names.length>rows*cols){
+      rows=Math.ceil(names.length/cols);
+      if(rows>30){ rows=30; names=names.slice(0,rows*cols); expanded='(已达30排上限,仅排列前'+names.length+'名)'; }
+      else expanded='(座位不足,已自动扩展为 '+rows+' 排 × '+cols+' 列)';
+    }
     var idx=0, nr=[];
     for(var r=0;r<rows;r++){ var row=[]; for(var c=0;c<cols;c++){ row.push(names[idx++]||''); } nr.push(row); }
     DB.seatRows=nr; DB.seatCols=cols; saveDB(); renderSeats();
-    alert('✅ 已按名册顺序排列 '+Math.min(names.length,cap)+' 名学生座位');
+    alert('✅ 已按名册顺序排列 '+Math.min(names.length,rows*cols)+' 名学生座位'+expanded);
   }
 
   // ---------- ④ 成绩:导入支持 粘贴 / 表格文件 / 图片 ----------
